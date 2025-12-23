@@ -1,0 +1,9 @@
+node_modules/
+.wwebjs_auth/
+.wwebjs_cache/
+session/
+dist/
+*.log
+.env
+package-lock.json
+produtos-clean.csv
