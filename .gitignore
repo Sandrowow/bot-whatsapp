@@ -9,3 +9,5 @@ session/
 *.log
 
 produtos-clean.csv
+git add .gitignore
+git status

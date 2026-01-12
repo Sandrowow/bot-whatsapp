@@ -2,7 +2,29 @@ import { Client, LocalAuth, Message } from 'whatsapp-web.js';
 import * as qrcode from 'qrcode-terminal';
 import * as fs from 'fs';
 import * as path from 'path';
+import express from 'express';
 
+// ===========================
+// Servidor HTTP para Railway
+// ===========================
+const app = express();
+
+app.get('/', (_req, res) => {
+  res.send('Bot WhatsApp está rodando ✅');
+});
+
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime() });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🌐 HTTP server ouvindo na porta ${PORT}`);
+});
+
+// ===========================
+// Cliente WhatsApp
+// ===========================
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
@@ -19,7 +41,6 @@ const client = new Client({
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
     }
 });
-    
 
 // Carregar produtos do CSV
 let produtos: any[] = [];
@@ -28,7 +49,7 @@ function carregarProdutos() {
     try {
         const csvPath = path.join(__dirname, '..', 'produtos-clean.csv');
         const csvContent = fs.readFileSync(csvPath, 'utf-8');
-        const linhas = csvContent.split('\n').slice(1); // Pula o cabeçalho
+        const linhas = csvContent.split('\n').slice(1);
         
         produtos = linhas
             .filter(linha => linha.trim())
@@ -43,12 +64,11 @@ function carregarProdutos() {
                     barcode: colunas[5]?.replace(/"/g, '').trim()
                 };
             })
-            .filter(p => p.id && p.nome); // Remove produtos inválidos
+            .filter(p => p.id && p.nome);
         
         console.log(`✅ ${produtos.length} produtos carregados!`);
     } catch (error) {
         console.error('❌ Erro ao carregar produtos:', error);
-        // Produtos de exemplo caso o CSV não carregue
         produtos = [
             { id: '1', nome: 'Produto A', preco: 'R$ 50,00', descricao: 'Descrição do produto A' },
             { id: '2', nome: 'Produto B', preco: 'R$ 75,00', descricao: 'Descrição do produto B' }
@@ -56,30 +76,49 @@ function carregarProdutos() {
     }
 }
 
+// Eventos do WhatsApp
+client.on('loading_screen', (percent: number, message: string) => {
+  console.log(`⏳ Loading: ${percent}% - ${message}`);
+});
+
+client.on('authenticated', () => {
+  console.log('🔐 Autenticado com sucesso');
+});
+
+client.on('auth_failure', (msg: string) => {
+  console.error('❌ Falha de autenticação:', msg);
+});
+
+client.on('disconnected', (reason: string) => {
+  console.error('🔌 Desconectado:', reason);
+});
+
+client.on('change_state', (state: string) => {
+  console.log('🔄 Estado:', state);
+});
+
 client.on('qr', (qr: string) => {
     console.log('📱 Escaneie o QR Code abaixo com seu WhatsApp:');
     (qrcode as any).generate(qr, { small: true });
-    
 });
 
 client.on('ready', () => {
     console.log('✅ Bot conectado e pronto!');
     console.log('📞 Aguardando mensagens...');
-    carregarProdutos(); // Carregar produtos quando conectar
+    carregarProdutos();
 });
 
 client.on('message', async (message: Message) => {
     try {
         console.log('🔔 MENSAGEM DETECTADA!');
-    console.log('De:', message.from);
-    console.log('Texto:', message.body);
+        console.log('De:', message.from);
+        console.log('Texto:', message.body);
+        
         const chat = await message.getChat();
         if (chat.isGroup) return;
 
         const msgText = message.body.toLowerCase().trim();
         const clientName = 'Cliente';
-
-        console.log(`📩 Mensagem recebida: ${message.body}`);
 
         // Menu principal
         if (msgText === 'menu' || msgText === 'oi' || msgText === 'olá' || msgText === 'ola') {
@@ -101,7 +140,7 @@ _Digite o número da opção desejada_`;
             return;
         }
 
-        // Opção 1: Mostrar primeiros produtos
+        // Opção 1
         if (msgText === '1' || msgText === 'catalogo' || msgText === 'catálogo' || msgText === 'produtos') {
             const primeiros20 = produtos.slice(0, 20);
             let catalogoMsg = `*📦 CATÁLOGO DE PRODUTOS*\n\n`;
@@ -119,7 +158,7 @@ _Digite o número da opção desejada_`;
             return;
         }
 
-        // Opção 2: Buscar produto
+        // Opção 2
         if (msgText.startsWith('buscar ') || msgText.startsWith('2')) {
             const termo = msgText.replace('buscar ', '').replace('2 ', '').trim();
             
@@ -150,7 +189,7 @@ _Digite o número da opção desejada_`;
             return;
         }
 
-        // Opção 3: Pedido
+        // Opção 3
         if (msgText === '3' || msgText.startsWith('pedido')) {
             const pedidoMatch = msgText.match(/pedido\s*(\d+)/);
             
@@ -182,7 +221,7 @@ _Digite *menu* para voltar ao menu principal_`;
             return;
         }
 
-        // Opção 4: Atendente
+        // Opção 4
         if (msgText === '4' || msgText === 'atendente') {
             const atendenteMsg = `👤 *Solicitação de Atendimento*
 
@@ -200,14 +239,14 @@ _Digite *menu* para voltar ao menu principal_`;
             return;
         }
 
-        // Opção 5: Contato
+        // Opção 5
         if (msgText === '5' || msgText === 'contato' || msgText === 'informações' || msgText === 'informacoes') {
             const contatoMsg = `📞 *Informações de Contato*
 
 📧 Email: contato@casadasemente.com
 📱 WhatsApp: (19) 99999-9999
 🌐 Site: www.casadasemente.com.br
-📍 Endereço: Campinas, SP
+📍 Endereço: São Paulo, SP
 
 _Digite *menu* para voltar ao menu principal_`;
 
@@ -215,7 +254,6 @@ _Digite *menu* para voltar ao menu principal_`;
             return;
         }
 
-        // Resposta padrão
         await message.reply(`Desculpe, não entendi sua mensagem. 😅\n\nDigite *menu* para ver as opções disponíveis.`);
 
     } catch (error) {
